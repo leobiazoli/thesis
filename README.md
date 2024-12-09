@@ -2,7 +2,7 @@
 
 ## Data base
 
-The data was extracted from the Scopus API containing the specific information of each author of a given article.
+The data was extracted from the [Scopus API](https://dev.elsevier.com) containing the specific information of each author of a given article.
 
 ## Exploratory data analysis
 
