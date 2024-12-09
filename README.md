@@ -10,4 +10,4 @@ The data was extracted from the [Scopus API](https://dev.elsevier.com) containin
 
 ## Synthetic control Analysis
 
-The generalized synthetic control analyses were carried out in the *R* programming language and are available at []().
+The generalized synthetic control analyses were carried out in the *R* programming language and are available at [scm-analysis](https://github.com/leobiazoli/thesis/blob/dbdf1bfe27eed0d8d6c87d8d291fcbc96bcada7b/scm-analysis.qmd).
