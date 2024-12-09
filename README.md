@@ -6,7 +6,7 @@ The data was extracted from the Scopus API containing the specific information o
 
 ## Exploratory data analysis
 
-![This is an image]()
+![This is an image](https://github.com/leobiazoli/analysis1.png)
 
 ## Synthetic control Analysis
 
