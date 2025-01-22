@@ -10,7 +10,7 @@ The data was extracted from the [Scopus API](https://dev.elsevier.com) containin
 
 ## Propensity Score Matching
 
-The propensity score matching analyses were conducted using the *R* programming language and are available at [psm-analysis]().
+The propensity score matching analyses were conducted using the *R* programming language and are available at [psm-analysis](https://github.com/leobiazoli/thesis/blob/main/data-exploratory.qmd).
 
 ## Synthetic control Analysis
 
