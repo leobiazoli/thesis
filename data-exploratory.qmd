@@ -1,0 +1,1486 @@
+---
+title: "Exploratory data analysis"
+bibliography: references.bib
+editor_options: 
+  chunk_output_type: console
+format:
+  html:
+    code-fold: true
+    code-tools: true
+---
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| label: load-pck
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(stringr)
+library(kableExtra)
+library(rmarkdown)
+library(tibble)
+library(DescTools)
+library(kableExtra)
+library(readxl)
+library(dplyr)
+```
+
+## Introduction
+
+This stage includes exploratory data analysis (EDA) with the aim of analyzing and investigating the data set and summarizing its main characteristics.
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| label: load-data
+load(file = "data_final_up.rda")
+```
+
+-   **Base dimension:** `r nrow(data_final_up)` rows and `r ncol(data_final_up)` columns
+-   **Number of authors:** `r n_distinct(data_final_up$author_id)`
+-   **Number of publications:** `r n_distinct(data_final_up$eid)`
+-   **Time:** `r min(data_final_up$publication_year)` to `r max(data_final_up$publication_year)`
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| label: view-data
+# view database (3.345.750 obs of 30 vars)
+paged_table(data_final_up)
+```
+
+Descriptive analyses will be carried out for the period from 2005 to 2020 to investigate the sub-areas of knowledge (only available for this period).
+
+```{r}
+#| echo: false
+#| eval: false
+#| message: false
+#| warning: false
+#| label: areas
+areas <- read_excel("areas_370681.xlsx") |>
+  select(eid, AGRI, BIOC, DENT, HEAL, IMMU, MEDI, MULT, NEUR, NURS, PHAR, VETE) |>
+  distinct()
+
+data_proj <- data_final_up |>
+  filter(publication_year >= 2005) |>
+  left_join(areas)
+
+save(data_proj, file = "data_proj.rda")
+```
+
+## Data analysis
+
+First, statistics were found for all the authors, without considering the academic mobility groups and then considering them by groups.
+
+-   **Average publications per author:**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: avg-aut
+# mean of articles by author (considering repeated publications)
+load(file = "data_proj.rda")
+mean_publication <- data_proj |>
+  select(author_id, eid) |>
+  group_by(author_id) |>
+  summarise(
+    n_publication = n_distinct(eid)
+  ) |> summarise(mean_publication = mean(n_publication))
+round(mean_publication[[1]],digits = 2)
+```
+
+-   **Distribution of publications by author:**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: dist-aut
+data_proj |>
+  select(author_id, eid) |>
+  group_by(author_id) |>
+  summarise(
+    n_publication = n_distinct(eid)) |>
+  ggplot(aes(x = n_publication)) +
+  geom_histogram(binwidth = 5, color = "navy", alpha = 0.7, position = "dodge") +
+  labs(
+    x = "Number of Publications",
+    y = "Frequency") +
+  theme_classic()
+```
+
+-   **Distribution of publications by year:**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: dist-pub
+data_proj |>
+  group_by(publication_year) |>
+  summarise(articles = n_distinct(eid)) |>
+  ggplot(aes(x = publication_year, y = articles)) +
+  geom_bar(stat = "identity", fill = "navy") +  
+  labs(x = "Publication year", 
+       y = "Number of articles") +
+  theme_classic()
+```
+
+-   **Distribution of authors and articles by year:**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: dist-aut-yr
+data_proj |>
+  group_by(publication_year) |>
+  summarise(articles = n_distinct(eid),
+            authors = n_distinct(author_id)) |>
+  ggplot(aes(x = publication_year)) +
+  geom_line(aes(y = articles, color = "Number of articles"), linewidth = 1) + 
+  geom_line(aes(y = authors, color = "Number of authors"), linewidth = 1) +
+  scale_color_manual(values = c("Number of articles" = "navy", 
+                                "Number of authors" = "darkgray")) +
+  labs(x = "Publication year", 
+       y = "Count",
+       color = "") + 
+  theme_classic()
+```
+
+-   **Researchers by type of mobility and publication range**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: rs-pub
+data_proj2 <- data_proj |>
+  filter(groups_c != "0") |> 
+  group_by(author_id) |>
+  summarise(num_publications = n_distinct(eid), .groups = "drop") |> 
+  left_join(data_proj, by = "author_id") |> 
+  mutate(
+    pub_range = case_when(
+      num_publications <= 5 ~ "5",
+      num_publications <= 10 ~ "10",
+      num_publications <= 15 ~ "15",
+      num_publications <= 20 ~ "20",
+      num_publications <= 25 ~ "25",
+      num_publications <= 30 ~ "30",
+      num_publications <= 35 ~ "35",
+      num_publications <= 40 ~ "40",
+      num_publications <= 45 ~ "45",
+      num_publications <= 50 ~ "50",
+      num_publications <= 55 ~ "55",
+      num_publications <= 60 ~ "60",
+      num_publications <= 65 ~ "65",
+      num_publications <= 70 ~ "70",
+      num_publications <= 75 ~ "75",
+      num_publications <= 80 ~ "80",
+      num_publications <= 85 ~ "85",
+      num_publications <= 90 ~ "90",
+      num_publications <= 95 ~ "95",
+      num_publications <= 100 ~ "100",
+      TRUE ~ "100+"
+    )
+  )
+
+# Garantir a ordem correta das faixas
+data_proj2 <- data_proj2 |> 
+  mutate(pub_range = factor(pub_range, levels = c("5", "10", "15", "20", "25", "30", "35", "40", 
+                                                  "45", "50", "55", "60", "65", "70", "75", "80", 
+                                                  "85", "90", "95", "100", "100+")))
+
+# Agrupar os dados e calcular a proporção por grupo
+data_grouped <- data_proj2 |>
+  group_by(pub_range, groups_c) |>
+  summarise(count = n(), .groups = "drop") |>  # Contar ocorrências por faixa e grupo
+  group_by(pub_range) |>  # Normalizar para 100% dentro de cada faixa
+  mutate(proportion = count / sum(count) * 100) |> 
+  ungroup()
+
+# Mapear os grupos para nomes específicos
+group_labels <- c(
+  `1` = "non-migrant",
+  `2` = "immigrant",
+  `3` = "emigrant",
+  `4` = "return migrant",
+  `5` = "transient"
+)
+
+# Criar o gráfico de barras empilhadas com tons de cinza
+ggplot(data_grouped, aes(x = pub_range, y = proportion, fill = as.factor(groups_c))) +
+  geom_bar(stat = "identity", position = "stack") +
+  scale_fill_manual(
+    values = rev(gray.colors(5)),  # Tons de cinza
+    labels = group_labels,    # Rótulos personalizados
+    name = ""  # Título da legenda
+  ) +
+  labs(
+    x = "Number of Publications",
+    y = "Percentage of Researchers"
+  ) +
+  theme_classic() +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size = 7),
+        legend.position = "bottom")
+
+```
+
+-   **Top 10 Journals:**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: top10
+data_proj |> 
+  distinct(eid, publicationName_sjr) |>
+  count(publicationName_sjr, sort = TRUE) |>
+  drop_na() |> 
+  head(10) |> 
+  ggplot(aes(x = reorder(publicationName_sjr, n), y = n)) +
+  geom_bar(stat = "identity", fill = "navy", color = "black", alpha = 0.7) +
+  labs(
+    x = "",
+    y = "Frequency") +
+  coord_flip() +
+  theme_classic()
+```
+
+```{r}
+#| eval: false
+#| echo: false
+# mode_by_journal_top10 <- data_proj |>
+#   group_by(publicationName_sjr) |>  # Agrupar por revista
+#   summarise(
+#     mode_group_c = groups_c |> 
+#       table() |>                    # Criar uma tabela de frequências
+#       which.max() |>                # Encontrar o índice do valor mais frequente
+#       names(),                      # Pegar o nome do índice (o valor de `group_c`)
+#     .groups = "drop"
+#   ) |> arrange(desc(mode_group_c)) |> view()
+```
+
+-   **Citation by year:**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: cit-yr
+data_proj |>
+  #filter(groups_c %in% c(2,3,4)) |>
+  ggplot(aes(x = as.factor(publication_year), y = cit_standard)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue", outlier.color = "red",
+               outlier.size = 2) +
+  labs(x = "Publication Year",
+        y = "Citations") +
+  theme_classic()
+```
+
+-   **Twenty most common countries of academic origin (a) and academic destination (b)**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: twenty-c
+# first country by author
+data_proj |>
+  arrange(author_id, publication_year) |>
+  group_by(author_id) |>
+  filter(!is.na(country_year_pub)) |> # drop group 0
+  summarise(
+    first_country = first(country_year_pub),
+    last_country = last(country_year_pub)
+  ) |>
+  ungroup() |>
+  filter(first_country != "Brazil") |> # retira Brazil
+  count(first_country, sort = T) |>
+  head(20) |>
+  ggplot(aes(x = reorder(first_country, n), y = n)) +
+  geom_bar(stat = "identity", fill = "darkgrey", color = "black", alpha = 0.7) +
+  #geom_text(aes(label = n), hjust = -0.2) +
+  labs(
+    #title = "(a) academic origin",
+    x = "",
+    y = "Frequency") +
+  coord_flip() +
+  theme_classic()
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| label: twenty-c2
+# last country by author
+data_proj |>
+  arrange(author_id, publication_year) |>
+  group_by(author_id) |>
+  filter(groups_c != "0") |>
+  summarise(
+    first_country = first(country_year_pub),
+    last_country = last(country_year_pub)
+  ) |>
+  ungroup() |>
+  filter(last_country != "Brazil") |> # retira Brazil
+  count(last_country, sort = T) |>
+  head(20) |>  #view()
+  ggplot(aes(x = reorder(last_country, n), y = n)) +
+  geom_bar(stat = "identity", fill = "darkgrey", color = "black", alpha = 0.7) +
+  #geom_text(aes(label = n), hjust = -0.2) +
+  labs(
+    #title = "(b) academic destination",
+    x = "",
+    y = "Frequency") +
+  coord_flip() +
+  theme_classic()
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| label: twenty-c3
+# last country by author EMIGRANT
+data_proj |>
+  arrange(author_id, publication_year) |>
+  group_by(author_id) |>
+  filter(groups_c != "0") |>
+  filter(groups_c == "3") |>
+  summarise(
+    first_country = first(country_year_pub),
+    last_country = last(country_year_pub)
+  ) |>
+  ungroup() |>
+  filter(last_country != "Brazil") |> # retira Brazil
+  count(last_country, sort = T) |>
+  head(20) |>  #view()
+  ggplot(aes(x = reorder(last_country, n), y = n)) +
+  geom_bar(stat = "identity", fill = "darkgrey", color = "black", alpha = 0.7) +
+  labs(x = "",
+    y = "Frequency") +
+  coord_flip() +
+  theme_classic()
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| label: twenty-c31
+# last country by author RETURN MIGRANT
+data_proj |>
+  arrange(author_id, publication_year) |>
+  group_by(author_id) |>
+  filter(groups_c != "0") |>
+  filter(groups_c == "4") |>
+  summarise(
+    last_country = head(country_year_pub,-1) # pegar todos os elementos menos o destino
+  ) |>
+  ungroup() |>
+  filter(last_country != "Brazil") |> # retira Brazil
+  count(last_country, sort = T) |>
+  head(20) |>  #view()
+  ggplot(aes(x = reorder(last_country, n), y = n)) +
+  geom_bar(stat = "identity", fill = "darkgrey", color = "black", alpha = 0.7) +
+  labs(x = "",
+    y = "Frequency") +
+  coord_flip() +
+  theme_classic()
+```
+
+```{r}
+data_proj_summary <- data_proj |>
+  filter(groups_c != "0") |>
+  filter(groups_c != "1") |>
+  group_by(author_id) |>
+  summarise(
+    n_countries = (n_distinct(country_year_pub)-1),
+    .groups = "drop"
+  ) |>
+  mutate(
+  n_countries = ifelse(n_countries == 0, 1, n_countries),
+  n_countries_grouped = ifelse(n_countries >= 10, "10+", as.character(n_countries)),
+  n_countries = factor(n_countries)
+  ) |>
+  mutate(
+    n_countries_grouped = fct_relevel(n_countries_grouped, as.character(1:9), "10+")
+  ) #|> filter(n_countries_grouped != "0")
+
+ggplot(data_proj_summary, aes(x = n_countries_grouped)) +
+  geom_bar(stat = "count", fill = "gray") +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5) + 
+  labs(
+    x = "Mobility score",
+    y = "Number of researchers"
+  ) +
+  theme_classic()
+
+```
+
+-   **Descriptive statistics by author:**
+    1.  Total publications (`n_articles`)
+    2.  Total citations (`n_citations`)
+    3.  Total number of countries by author (`n_countries`)
+    4.  Average number of citations (`mean_citation`)
+    5.  Max of citations (`max_citation`)
+    6.  Author group (`groups_c`)
+    7.  Number of international collaboration (`collab`)
+
+```{r}
+#| message: false
+#| warning: false
+#| label: gen1
+data_proj |>
+  group_by(author_id, publication_year) |>
+  summarise(
+    n_articles = round(n_distinct(eid), 2),
+    n_citations = round(sum(cit_standard), 2),
+    n_countries = round(n_distinct(country_year_pub), 2),
+    mean_citation = round(mean(cit_standard), 2),
+    max_citation = round(max(cit_standard), 2),
+    groups = unique(groups_c),
+    collab = round(sum(foreign_country), 2)
+  ) |> 
+  paged_table()
+```
+
+## Data analysis by academic mobility group
+
+Descriptive statistics of authors with publications from 2005 to 2020 in Brazil by groups of migratory movements (the groups were defined in Step 3 in Data Organization[^1]):
+
+[^1]: Classification of authors into groups:
+
+    0)  single article researcher;
+    1)  non-migrant researcher;
+    2)  immigrant researcher;
+    3)  emigrant researcher;
+    4)  returning migrant researcher;
+    5)  transient migrant researcher.
+
+<!-- -->
+
+**(1) General statistics for bibliometric indicators**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: general-bib
+data_proj |>
+  group_by(groups_c) |>
+  summarise(
+    mean_citation = round(mean(cit_standard), 2),
+    sd_citation = round(sd(cit_standard), 2),
+    mean_sjr = round(mean(SJR, na.rm = T), 2),
+    sd_sjr = round(sd(SJR, na.rm = T), 2),
+    n_articles = n_distinct(eid),
+    n = n_distinct(author_id)
+  ) |> 
+  mutate(group_label = case_when(
+    groups_c == '0' ~ 'Single article',
+    groups_c == '1' ~ 'Non-migrant',
+    groups_c == '2' ~ 'Immigrant',
+    groups_c == '3' ~ 'Emigrant',
+    groups_c == '4' ~ 'Returning migrant',
+    TRUE ~ 'Transient migrant'
+  )) |>
+  paged_table()
+
+data_proj |>
+  group_by(author_id, groups_c) |>
+  summarise(collab = sum(foreign_country)) |>
+  ungroup() |>
+  group_by(groups_c) |>
+  summarise(mean_collab = round(mean(collab),2),
+            sd_collab = round(sd(collab),2)) |> 
+  mutate(group_label = case_when(
+    groups_c == '0' ~ 'Single article',
+    groups_c == '1' ~ 'Non-migrant',
+    groups_c == '2' ~ 'Immigrant',
+    groups_c == '3' ~ 'Emigrant',
+    groups_c == '4' ~ 'Returning migrant',
+    TRUE ~ 'Transient migrant'
+  )) |>
+  paged_table()
+
+data_proj$groups_c <- as.factor(data_proj$groups_c)
+  
+data_proj2 <- data_proj |>
+  filter(groups_c != "0")
+
+anova_cit <- aov(cit_standard ~ groups_c, data = data_proj2)
+tukey_cit <- TukeyHSD(anova_cit)
+
+anova_sjr <- aov(SJR ~ groups_c, data = data_proj2)
+tukey_sjr <- TukeyHSD(anova_sjr)
+  
+library(agricolae)
+
+HSD.test(anova_cit, "groups_c", console=TRUE)
+HSD.test(anova_sjr, "groups_c", console=TRUE)
+  
+data_proj3 <- data_proj2 |>
+  group_by(author_id, groups_c) |>
+  summarise(collab = sum(foreign_country)) |>
+  ungroup()
+  
+anova_col <- aov(collab ~ groups_c, data = data_proj3)
+tukey_col <- TukeyHSD(anova_col)
+
+HSD.test(anova_col, "groups_c", console=TRUE)
+```
+
+**(2) Frequency of authors by group**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: freq
+data_proj |>
+  group_by(groups_c) |>
+  summarise(authors = n_distinct(author_id),
+            publications = n_distinct(eid)) |>
+  mutate(group_label = case_when(
+    groups_c == '0' ~ 'Single article',
+    groups_c == '1' ~ 'Non-migrant',
+    groups_c == '2' ~ 'Immigrant',
+    groups_c == '3' ~ 'Emigrant',
+    groups_c == '4' ~ 'Returning migrant',
+    TRUE ~ 'Transient migrant'
+  )) |>
+  mutate(freq = (authors/sum(authors) * 100)) |>
+  paged_table()
+```
+
+**(3) Average number of publications by group**
+
+```{r}
+#| warning: false
+#| message: false
+#| label: avg-by
+data_proj |>
+  group_by(groups_c) |>
+  select(author_id, eid) |>
+  summarise(
+    n_publication = n_distinct(eid),
+    n_authors = n_distinct(author_id),
+    average_articles = n_publication/n_authors
+  ) |>
+  mutate(group_label = case_when(
+    groups_c == '0' ~ 'Single article',
+    groups_c == '1' ~ 'Non-migrant',
+    groups_c == '2' ~ 'Immigrant',
+    groups_c == '3' ~ 'Emigrant',
+    groups_c == '4' ~ 'Returning migrant',
+    TRUE ~ 'Transient migrant'
+  )) |>
+  paged_table()
+```
+
+**(4) Citation statistics by group**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: cit-byg
+data_proj |>
+  distinct(eid, groups_c, citedby_count) |>
+  group_by(groups_c) |>
+  summarise(mean_citation = mean(citedby_count),
+            median_citation = median(citedby_count),
+            min_citation = min(citedby_count),
+            max_citation = max(citedby_count),
+            sd_citation = sd(citedby_count)) |>
+  mutate(group_label = case_when(
+    groups_c == '0' ~ 'Single article',
+    groups_c == '1' ~ 'Non-migrant',
+    groups_c == '2' ~ 'Immigrant',
+    groups_c == '3' ~ 'Emigrant',
+    groups_c == '4' ~ 'Returning migrant',
+    TRUE ~ 'Transient migrant'
+  )) |>
+  paged_table()
+```
+
+**(5) SJR statistics by group**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: sjr-byg
+data_proj |>
+  distinct(eid, groups_c, SJR) |>
+  group_by(groups_c) |>
+  summarise(mean_SJR = mean(SJR, na.rm = T),
+            median_SJR = median(SJR, na.rm = T),
+            min_SJR = min(SJR, na.rm = T),
+            max_SJR = max(SJR, na.rm = T),
+            sd_SJR = sd(SJR, na.rm = T)) |>
+  mutate(group_label = case_when(
+    groups_c == '0' ~ 'Single article',
+    groups_c == '1' ~ 'Non-migrant',
+    groups_c == '2' ~ 'Immigrant',
+    groups_c == '3' ~ 'Emigrant',
+    groups_c == '4' ~ 'Returning migrant',
+    TRUE ~ 'Transient migrant'
+  )) |>
+  paged_table()
+```
+
+**(6) Top 10 authors with more publication**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: top10-byg
+data_proj |>
+  group_by(author_id, groups_c) |>
+  summarise(n_pub = n_distinct(eid)) |>
+  arrange(desc(n_pub)) |>
+  paged_table()
+```
+
+**(7) Mean of citation by author**
+
+```{r}
+#| warning: false
+#| message: false
+#| label: mean-byat
+data_proj |>
+  group_by(author_id, groups_c) |>
+  summarise(
+    media_citacoes = mean(citedby_count, na.rm = TRUE),
+    num_artigos = n_distinct(eid)) |>
+  arrange(desc(media_citacoes)) |>
+  head(100) |>
+  paged_table()
+```
+
+**(8) Mean of SJR by author**
+
+```{r}
+#| warning: false
+#| message: false
+#| label: sjr-byat
+data_proj |>
+  group_by(author_id, groups_c) |>
+  summarise(
+    media_sjr = mean(SJR, na.rm = TRUE),
+    num_artigos = n_distinct(eid)) |>
+  arrange(desc(media_sjr)) |>
+  head(100) |>
+  paged_table()
+```
+
+**(9) Citations for Return migrant**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: cit-ret
+data_proj |>
+  filter(groups_c %in% c(4)) |>
+  ggplot(aes(x = as.factor(publication_year), y = cit_standard)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue", outlier.color = "red",
+               outlier.size = 2) +
+  labs(x = "Publication Year",
+        y = "Citations") +
+  theme_classic()
+```
+
+**(10) SJR for Return migrant**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: sjr-ret
+data_proj |>
+  filter(groups_c %in% c(4)) |>
+  ggplot(aes(x = as.factor(publication_year), y = SJR)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue", outlier.shape = NA) +
+  labs(x = "Publication Year",
+        y = "SJR") +
+    scale_y_continuous(limits = c(0, 3)) +  # Ajusta o eixo Y
+  theme_classic()
+```
+
+## Researchers by area
+
+-   **Distribution of publications by classification area:**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: res-bya
+data_proj |> 
+  distinct(eid, DENT, HEAL, IMMU, MEDI, MULT, NEUR, NURS, PHAR, VETE) |>
+  summarise(dent = sum(DENT, na.rm = T),
+            heal = sum(HEAL, na.rm = T),
+            immu = sum(IMMU, na.rm = T),
+            medi = sum(MEDI, na.rm = T),
+            mult = sum(MULT, na.rm = T),
+            neur = sum(NEUR, na.rm = T),
+            nurs = sum(NURS, na.rm = T),
+            phar = sum(PHAR, na.rm = T),
+            vete = sum(VETE, na.rm = T), 
+            total = n()) |> paged_table()
+```
+
+-   **Researchers by area and type of mobility**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: res-typ
+areas <- c("DENT", "HEAL", "IMMU", "MEDI", "MULT", "NEUR", "NURS", "PHAR", "VETE", "AGRI", "BIOC")
+
+# Inicializar uma lista para armazenar os resultados
+results_list <- list()
+
+# Loop sobre as áreas
+for (area in areas) {
+  result <- data_proj |>
+    filter(!!sym(area) == 1) |>  # Filtra pela área atual
+    group_by(groups_c) |>
+    summarise(
+      mean_citation = round(mean(cit_standard), 2),
+      sd_citation = round(sd(cit_standard), 2),
+      mean_sjr = round(mean(SJR, na.rm = TRUE), 2),
+      sd_sjr = round(sd(SJR, na.rm = TRUE), 2),
+      n_articles = n_distinct(eid),
+      n = n_distinct(author_id)
+    ) |> 
+    mutate(
+      group_label = case_when(
+        groups_c == '0' ~ 'Single article',
+        groups_c == '1' ~ 'Non-migrant',
+        groups_c == '2' ~ 'Immigrant',
+        groups_c == '3' ~ 'Emigrant',
+        groups_c == '4' ~ 'Returning migrant',
+        TRUE ~ 'Transient migrant'
+      ),
+      area = area  # Adicionar o nome da área
+    )
+  
+  # Adicionar à lista de resultados
+  results_list[[area]] <- result
+}
+
+# Combinar os resultados em um único data frame
+final_result <- bind_rows(results_list)
+
+final_result$group_reclassified <- ifelse(final_result$group_label == "Non-migrant", "Non-migrant", "Migrant")
+
+final_result |>
+  filter(group_label != c("Single article")) |>
+  ggplot(aes(x = area, y = n, fill = group_reclassified)) +
+  geom_bar(stat = "identity") + # , position = "fill"
+  scale_fill_grey() +
+  #scale_y_continuous(labels = scales::percent) + # Escala em porcentagem
+  labs(
+    x = "",
+    y = "# researchers",
+    fill = ""
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom", # Legenda na parte inferior
+    axis.text.x = element_text(angle = 0, hjust = 0.5) # Rotação no eixo X
+  )
+```
+
+-   **Bibliometric indicators by area**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: res-biblio
+# media de citacoes 
+data_grouped <- final_result %>%
+  group_by(area, group_reclassified) %>%
+  summarise(mean_citation = mean(mean_citation), 
+            mean_sjr = mean(mean_sjr),
+            .groups = "drop")
+
+# Criar o gráfico de barras agrupadas
+ggplot(data_grouped, aes(x = area, y = mean_citation, fill = group_reclassified)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_manual(values = c("Non-migrant" = "gray", "Migrant" = "black")) +
+  labs(
+    x = "",
+    y = "Mean Citation",
+    fill = ""
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom"
+  )
+
+ggplot(data_grouped, aes(x = area, y = mean_sjr, fill = group_reclassified)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_manual(values = c("Non-migrant" = "gray", "Migrant" = "black")) +
+  labs(
+    x = "",
+    y = "Mean SJR",
+    fill = ""
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom"
+  )
+```
+
+-   **Annual citations for Medicine**
+
+```{r}
+#| message: false
+#| warning: false
+#| label: annual-medi
+data_proj |>
+  filter(MEDI == 1) |>
+  ggplot(aes(x = as.factor(publication_year), y = cit_standard)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue", outlier.color = "red",
+               outlier.size = 2) +
+  labs(x = "Publication Year",
+        y = "Citations") +
+  theme_classic()
+```
+
+## Maps: Emigrant
+
+```{r}
+#| eval: false
+#| message: false
+#| warning: false
+#| label: map1
+# Map of the researchers' migratory movements
+library(rworldmap)
+library(geosphere)
+library(maps)
+
+df <- data_proj |>
+  #filter(MEDI == 1) |> # por area
+  arrange(author_id, publication_year) |>
+  filter(!is.na(country_year_pub)) |> # drop group 0
+  filter(groups_c == "3") |>
+  group_by(author_id) |>
+  summarise(
+    first_country = first(country_year_pub),
+    last_country = last(country_year_pub)
+  ) |>
+  ungroup() 
+
+df <- df |>
+  mutate(last_country = case_when(
+    last_country == "Czech Republic" ~ "Czech Rep.",
+    last_country == "Russian Federation" ~ "Russia",
+    last_country == "South Korea" ~ "S. Korea",
+    last_country == "Dominican Republic" ~ "Dominican Rep.",
+    last_country == "Viet Nam" ~ "Vietnam",
+    last_country == "Bosnia and Herzegovina" ~ "Bosnia and Herz.",
+    last_country == "Brunei Darussalam" ~ "Brunei",
+    TRUE ~ last_country)) |>
+  filter(last_country != "" & !is.na(last_country))
+
+# Data of map
+data(countriesLow)
+
+# Lat and lon for each country
+coords <- countriesLow@data %>%
+  dplyr::transmute(country = NAME, lat = LAT, lon = LON)
+
+all_pairs <- df |>
+  left_join(coords, join_by(first_country == country)) |>
+  left_join(coords, join_by(last_country == country)) |>
+  filter(first_country == "Brazil")
+
+all_pairs$author_id <- NULL
+
+colnames(all_pairs) <- c("i_country", "f_country","lat1","long1","lat2","long2")
+
+all_pairs |>
+  count(i_country, f_country) |>
+  arrange(desc(n))
+
+df_freq <- all_pairs %>%
+  count(i_country, f_country, name = "frequency") %>%
+  arrange(desc(frequency))
+
+df_with_frequency <- all_pairs %>%
+  left_join(df_freq, by = c("i_country", "f_country")) |>
+  distinct()
+
+all_pairs <- df_with_frequency
+
+# background map
+par(mar=c(0,0,0,0))
+map('world',col="gray", fill=T, bg="white", lwd=0.5,mar=rep(0,4),border=0, ylim=c(-80,80) ) # #f2f2f2
+
+max_lwd <- 4
+
+# Add connections with line thickness proportional to frequency
+for(i in 1:nrow(all_pairs)){
+  # Ajusta a espessura com base na frequência, normalizando para o intervalo de 1 a max_lwd
+  line_width <- 0.2 + (all_pairs$frequency[i] / max(all_pairs$frequency)) * (max_lwd - 1)
+  plot_my_connection(all_pairs$long1[i], all_pairs$lat1[i], all_pairs$long2[i], all_pairs$lat2[i], col = "navy", lwd = line_width)
+}
+
+# add every connections:
+for(i in 1:nrow(all_pairs)){
+  plot_my_connection(all_pairs$long1[i], all_pairs$lat1[i], all_pairs$long2[i], all_pairs$lat2[i], col="skyblue", lwd=1)
+}
+
+
+# A function to plot connections
+plot_my_connection=function( dep_lon, dep_lat, arr_lon, arr_lat, ...){
+  inter <- gcIntermediate(c(dep_lon, dep_lat), c(arr_lon, arr_lat), n=50, addStartEnd=TRUE, breakAtDateLine=F)             
+  inter=data.frame(inter)
+  diff_of_lon=abs(dep_lon) + abs(arr_lon)
+  if(diff_of_lon > 180){
+    lines(subset(inter, lon>=0), ...)
+    lines(subset(inter, lon<0), ...)
+  }else{
+    lines(inter, ...)
+  }
+}
+
+# Type 2
+color_palette <- colorRampPalette(c("lightblue", "blue", "darkblue"))(100)
+all_pairs$color <- color_palette[cut(all_pairs$frequency, breaks = 100, labels = FALSE)]
+
+# Configurações do mapa de fundo
+par(mar = c(0, 0, 0, 0))
+map("world", col = "#f2f2f2", fill = TRUE, bg = "white", lwd = 0.5, mar = rep(0, 4), border = 0, ylim = c(-80, 80))
+
+# Adiciona cada conexão com cor correspondente à frequência
+for (i in 1:nrow(all_pairs)) {
+  plot_my_connection(
+    all_pairs$long1[i], all_pairs$lat1[i],
+    all_pairs$long2[i], all_pairs$lat2[i],
+    col = all_pairs$color[i], lwd = 2
+  )
+}
+
+# Função para plotar conexões
+plot_my_connection <- function(dep_lon, dep_lat, arr_lon, arr_lat, ...) {
+  inter <- gcIntermediate(c(dep_lon, dep_lat), c(arr_lon, arr_lat), n = 50, addStartEnd = TRUE, breakAtDateLine = FALSE)
+  inter <- data.frame(inter)
+  diff_of_lon <- abs(dep_lon) + abs(arr_lon)
+  if (diff_of_lon > 180) {
+    lines(subset(inter, lon >= 0), ...)
+    lines(subset(inter, lon < 0), ...)
+  } else {
+    lines(inter, ...)
+  }
+}
+
+legend("bottomright", legend = c("Low", "Medium", "High"), 
+       fill = color_palette[c(1, 50, 100)], title = "Frequency")
+
+all_pairs |>
+  filter(i_country == "Brazil") |>
+  select(i_country, f_country) |>
+  distinct() |> view()
+```
+
+![](map-emigrant.png)
+
+## Maps: Return migrant
+
+```{r}
+#| eval: false
+#| message: false
+#| warning: false
+#| label: map2
+
+df_4 <- data_proj |>
+  arrange(author_id, publication_year) |>
+  filter(!is.na(country_year_pub)) |> # drop group 0
+  filter(groups_c == "4") |>
+  group_by(author_id) |>
+  mutate(
+    first_country = first(country_year_pub),
+    first_change_country = country_year_pub[which(country_year_pub != first(country_year_pub))[1]]
+  ) |>
+  summarise(
+    first_country = first(first_country),
+    first_change_country = first(na.omit(first_change_country)) # Remove valores NA se não houver mudanças
+  )
+
+df_4 <- df_4 |>
+  mutate(first_change_country = case_when(
+    first_change_country == "Czech Republic" ~ "Czech Rep.",
+    first_change_country == "Russian Federation" ~ "Russia",
+    first_change_country == "South Korea" ~ "S. Korea",
+    first_change_country == "Dominican Republic" ~ "Dominican Rep.",
+    first_change_country == "Viet Nam" ~ "Vietnam",
+    first_change_country == "Bosnia and Herzegovina" ~ "Bosnia and Herz.",
+    first_change_country == "Brunei Darussalam" ~ "Brunei",
+    TRUE ~ first_change_country  # Mantém os valores originais para os que não correspondem
+  )) |>
+  filter(first_change_country != "" & !is.na(first_change_country))
+
+all_pairs_4 <- df_4 |>
+  left_join(coords, join_by(first_country == country)) |>
+  left_join(coords, join_by(first_change_country == country)) |>
+  filter(first_country == "Brazil")
+
+all_pairs_4$author_id <- NULL
+
+colnames(all_pairs_4) <- c("i_country", "f_country","lat1","long1","lat2","long2")
+
+# all_pairs_4 |>
+#   count(i_country, f_country) |>
+#   arrange(desc(n))
+
+df_freq_4 <- all_pairs_4 %>%
+  count(i_country, f_country, name = "frequency") %>%
+  arrange(desc(frequency))
+
+# Juntar de volta na base original (opcional)
+df_with_frequency_4 <- all_pairs_4 %>%
+  left_join(df_freq_4, by = c("i_country", "f_country")) |>
+  distinct()
+
+all_pairs_4 <- df_with_frequency_4
+
+# background map
+par(mar=c(0,0,0,0))
+map('world',col="gray", fill=T, bg="white", lwd=0.5,mar=rep(0,4),border=0, ylim=c(-80,80) ) # #f2f2f2
+
+max_lwd <- 4 
+
+# Add connections with line thickness proportional to frequency
+for(i in 1:nrow(all_pairs_4)){
+  # Ajusta a espessura com base na frequência, normalizando para o intervalo de 1 a max_lwd
+  line_width <- 0.2 + (all_pairs_4$frequency[i] / max(all_pairs_4$frequency)) * (max_lwd - 1)
+  plot_my_connection(all_pairs_4$long1[i], all_pairs_4$lat1[i], all_pairs_4$long2[i], all_pairs_4$lat2[i], col = "navy", lwd = line_width)
+}
+
+# add every connections:
+for(i in 1:nrow(all_pairs_4)){
+  plot_my_connection(all_pairs_4$long1[i], all_pairs_4$lat1[i], all_pairs_4$long2[i], all_pairs_4$lat2[i], col="skyblue", lwd=1)
+}
+
+# A function to plot connections
+plot_my_connection=function( dep_lon, dep_lat, arr_lon, arr_lat, ...){
+  inter <- gcIntermediate(c(dep_lon, dep_lat), c(arr_lon, arr_lat), n=50, addStartEnd=TRUE, breakAtDateLine=F)             
+  inter=data.frame(inter)
+  diff_of_lon=abs(dep_lon) + abs(arr_lon)
+  if(diff_of_lon > 180){
+    lines(subset(inter, lon>=0), ...)
+    lines(subset(inter, lon<0), ...)
+  }else{
+    lines(inter, ...)
+  }
+}
+```
+
+![](map-return.png)
+
+## Comparison pre and post academic mobility (emigrant)
+
+To perform the comparison between the authors' pre- and post-academic mobility periods, the year of the first change of country was first found.
+
+![](example-author.png){width="500"}
+
+First, graphs were made for the **number of citations** and the **SJR index** without any transformation of the variable.
+
+```{r}
+#| warning: false
+#| message: false
+#| label: comp1
+# Date when migration happens
+df_g3 <- data_proj |>
+  filter(groups_c == "3") |> 
+  arrange(author_id, publication_year) |>
+  group_by(author_id) |>
+  mutate(previous_country = lag(country_year_pub, order_by = publication_year)) |>
+  mutate(change_year = if_else(country_year_pub != previous_country & !is.na(previous_country), publication_year, NA_real_)) |>
+  group_by(author_id) |>
+  mutate(first_change_year = min(change_year, na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(period = if_else(publication_year < first_change_year, "Before Change", "After Change")) |>
+  select(-previous_country, -change_year) |>
+  filter(first_change_year %in% c(2010:2015)) # coment
+
+ggplot(df_g3, aes(x = publication_year, y = citedby_count)) + # citedby_count
+  geom_point(aes(color = period)) +
+  geom_vline(aes(xintercept = first_change_year), linetype = "dashed", color = "black") +
+  scale_color_manual(values = c("Before Change" = "black", "After Change" = "red")) +
+  labs(
+    x = "Publication year",
+    y = "Number of citation",
+    color = ""
+  ) +
+  facet_wrap(~ first_change_year, scales = "free_x") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+
+ggplot(df_g3, aes(x = publication_year, y = SJR)) + 
+  geom_point(aes(color = period)) +
+  geom_vline(aes(xintercept = first_change_year), linetype = "dashed", color = "black") +
+  scale_color_manual(values = c("Before Change" = "black", "After Change" = "red")) +
+  labs(
+    x = "Publication year",
+    y = "SJR index",
+    color = ""
+  ) +
+  facet_wrap(~ first_change_year, scales = "free_x") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+```
+
+The 99th percentile was then winsorized, which means that any value above the 99th percentile was replaced by the value corresponding to the 99th percentile [(Aykac, 2021)](https://link.springer.com/article/10.1007/s11192-021-04052-4#Abs1).
+
+```{r}
+#| warning: false
+#| message: false
+#| label: comp2
+# Aplicar a winsorização por ano
+df_g3_1 <- df_g3 %>%
+  group_by(publication_year) %>%
+  mutate(citations_winsorized = Winsorize(cit_standard, probs = c(0, 0.99)))
+
+ggplot(df_g3_1, aes(x = publication_year, y = citations_winsorized)) + 
+  geom_point(aes(color = period)) +
+  geom_vline(aes(xintercept = first_change_year), linetype = "dashed", color = "black") +
+  scale_color_manual(values = c("Before Change" = "black", "After Change" = "red")) +
+  labs(
+    x = "Publication year",
+    y = "Number of citation",
+    color = ""
+  ) +
+  facet_wrap(~ first_change_year, scales = "free_x") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+```
+
+## Comparison pre and post academic mobility (return migrant)
+
+```{r}
+#| warning: false
+#| message: false
+#| label: comp3
+# Date when migration happens
+df_g4 <- data_proj |>
+  filter(groups_c == "4") |> 
+  arrange(author_id, publication_year) |>
+  group_by(author_id) |>
+  mutate(previous_country = lag(country_year_pub, order_by = publication_year)) |>
+  mutate(change_year = if_else(country_year_pub != previous_country & !is.na(previous_country), publication_year, NA_real_)) |>
+  group_by(author_id) |>
+  mutate(first_change_year = min(change_year, na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(period = if_else(publication_year < first_change_year, "Before Change", "After Change")) |>
+  select(-previous_country, -change_year) |>
+  filter(first_change_year %in% c(2010:2015)) # coment
+
+ggplot(df_g4, aes(x = publication_year, y = citedby_count)) + # citedby_count
+  geom_point(aes(color = period)) +
+  geom_vline(aes(xintercept = first_change_year), linetype = "dashed", color = "black") +
+  scale_color_manual(values = c("Before Change" = "black", "After Change" = "red")) +
+  labs(
+    x = "Publication year",
+    y = "Number of citation",
+    color = ""
+  ) +
+  facet_wrap(~ first_change_year, scales = "free_x") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+
+ggplot(df_g4, aes(x = publication_year, y = SJR)) + 
+  geom_point(aes(color = period)) +
+  geom_vline(aes(xintercept = first_change_year), linetype = "dashed", color = "black") +
+  scale_color_manual(values = c("Before Change" = "black", "After Change" = "red")) +
+  labs(
+    x = "Publication year",
+    y = "SJR index",
+    color = ""
+  ) +
+  facet_wrap(~ first_change_year, scales = "free_x") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+```
+
+The 99th percentile was then winsorized, which means that any value above the 99th percentile was replaced by the value corresponding to the 99th percentile [(Aykac, 2021)](https://link.springer.com/article/10.1007/s11192-021-04052-4#Abs1).
+
+```{r}
+#| warning: false
+#| message: false
+#| label: comp4
+# Real Data
+# Aplicar a winsorização por ano
+df_g4_1 <- df_g4 %>%
+  group_by(publication_year) %>%
+  mutate(citations_winsorized = Winsorize(cit_standard, probs = c(0, 0.99)))
+
+ggplot(df_g4_1, aes(x = publication_year, y = citations_winsorized)) + 
+  geom_point(aes(color = period)) +
+  geom_vline(aes(xintercept = first_change_year), linetype = "dashed", color = "black") +
+  scale_color_manual(values = c("Before Change" = "black", "After Change" = "red")) +
+  labs(
+    x = "Publication year",
+    y = "Number of citation",
+    color = ""
+  ) +
+  facet_wrap(~ first_change_year, scales = "free_x") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+```
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+#| eval: false
+# ## Analysis per country
+
+# Separar os pesquisadores com destino nos EUA, Canadá e Reino Unido
+# Número de citações e fator de impacto médio (série temporal por país)
+# Comparar esses resultados com quem nunca saiu do Brasil
+
+# last country by author
+top3 <- data_proj |>
+  arrange(author_id, publication_year) |>
+  group_by(author_id) |>
+  filter(groups_c == "3") |> # or != 0
+  summarise(
+    last_country = last(country_year_pub)
+  ) |>
+  ungroup() |>
+  filter(last_country %in% c("United States", "Canada", "United Kingdom")) |>
+  select(author_id) |>
+  as.list()
+
+data_top3 <- data_proj |>
+  filter(author_id %in% top3[["author_id"]])
+```
+
+```{r}
+#| warning: false
+#| message: false
+#| echo: false
+#| eval: false
+# media de citacao e sjr para os pesquisadores que foram para os EUA, UK ou Canada
+data_top3 <- data_top3 |>
+  group_by(publication_year) |>
+  summarise(citation = mean(cit_standard),
+            sjr = mean(SJR, na.rm = TRUE)) |>
+  mutate(group = "Top 3")
+
+data_final_up_group1 <- data_proj |>
+  filter(groups_c == "1") |>
+  group_by(publication_year) |>
+  summarise(citation = mean(cit_standard),
+            sjr = mean(SJR, na.rm = TRUE)) |>
+  mutate(group = "Never Left Brazil")
+
+# Combinando os dois dataframes
+combined_data <- bind_rows(data_top3, data_final_up_group1)
+
+# Criando o gráfico combinado
+ggplot(combined_data) +
+  geom_bar(aes(x = publication_year, y = sjr, fill = group), 
+           stat = "identity", position = "dodge", alpha = 0.7) +  
+  geom_line(aes(x = publication_year, y = citation, color = group, group = group), 
+            size = 1.5) +
+  labs(x = "Publication Year", 
+       y = "SJR",
+       fill = "Group", 
+       color = "Group") +
+  scale_y_continuous(sec.axis = sec_axis(~.*1, name = "Citation")) +
+  theme_classic() +
+  theme(legend.position = "top")
+```
+
+## Propensity Score Matching - PSM
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+#| label: gen2
+
+df_pre <- data_proj |>
+  filter(groups_c %in% c("3", "4")) |>
+  arrange(author_id, publication_year) |>
+  group_by(author_id) |>
+  mutate(previous_country = lag(country_year_pub, order_by = publication_year)) |>
+  mutate(change_year = if_else(country_year_pub != previous_country & !is.na(previous_country), publication_year, NA_real_)) |>
+  group_by(author_id) |>
+  mutate(first_change_year = min(change_year, na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(period = if_else(publication_year < first_change_year, 0, 1)) |>
+  select(-previous_country, -change_year)
+
+df_pre2 <- df_pre |>
+  group_by(author_id) |> # antes agrupava por "period"
+  summarise(
+    n_articles = round(n_distinct(eid), 2),
+    n_citations = round(sum(cit_standard), 2),
+    n_countries = round(n_distinct(country_year_pub), 2),
+    mean_citation = round(mean(cit_standard), 2),
+    mean_sjr = round(mean(SJR),2),
+    age = max(time_pub),
+    groups = unique(groups_c),
+    collab = round(mean(foreign_country), 2),
+    first_publication = min(publication_year, na.rm = TRUE),
+    last_publication = max(publication_year, na.rm = TRUE),
+    career_age = last_publication - first_publication
+  ) |>
+  mutate(mean_sjr = ifelse(is.na(mean_sjr), mean(mean_sjr, na.rm = TRUE), mean_sjr)) |>
+  mutate(period = 1) # antes sem isso 
+
+df_pre0 <- data_proj |>
+  filter(groups_c == "1") |>
+  group_by(author_id) |>
+  summarise(
+    n_articles = round(n_distinct(eid), 2),
+    n_citations = round(sum(cit_standard), 2),
+    n_countries = round(n_distinct(country_year_pub), 2),
+    mean_citation = round(mean(cit_standard), 2),
+    mean_sjr = round(mean(SJR),2),
+    age = max(time_pub),
+    groups = unique(groups_c),
+    collab = round(mean(foreign_country), 2),
+    first_publication = min(publication_year, na.rm = TRUE),
+    last_publication = max(publication_year, na.rm = TRUE),
+    career_age = last_publication - first_publication
+  ) |> 
+  mutate(mean_sjr = ifelse(is.na(mean_sjr), mean(mean_sjr, na.rm = TRUE), mean_sjr)) |> # comentar esse
+  mutate(period = 0, groups = "0") 
+
+teste_psm <- df_pre0 |>
+  full_join(df_pre2) |>
+  mutate(mean_sjr = replace_na(mean_sjr, 0))
+
+psm_emig <- teste_psm |>
+  filter(groups != "4") 
+
+library(MatchIt)
+
+#row.names(psm_emig) = psm_emig$author_id
+
+model_teste1 = matchit(period ~ n_articles + career_age + collab, method = "nearest", data = psm_emig, ratio = 1, caliper = 0.1) # mean_citation + mean_sjr
+
+pards1 = match.data(model_teste1)
+
+cov = c("n_articles", "career_age", "collab")
+
+#lapply(cov, function(v){
+ # t.test(pards1[[v]] ~ pards1$period)})
+
+# Estimando efeito de tratamento ------------------------------------------
+
+# with(pards1, t.test(mean_citation ~ period))
+# with(pards1, t.test(mean_sjr ~ period))
+
+# RETURN MIGRANT-------------------------------------------------------
+psm_ret <- teste_psm |>
+  filter(groups != "3")
+
+model_teste2 = matchit(period ~ n_articles + career_age + collab, method = "nearest", data = psm_ret, ratio = 1, caliper = 0.1) # mean_citation + mean_sjr
+
+pards2 = match.data(model_teste2)
+
+cov = c("n_articles", "career_age", "collab")
+
+# lapply(cov, function(v){
+  # t.test(pards2[[v]] ~ pards2$period)})
+
+# Estimando efeito de tratamento ------------------------------------------
+
+# with(pards2, t.test(mean_citation ~ period))
+# with(pards2, t.test(mean_sjr ~ period))
+
+```
+
+### Emigrant
+
+```{r}
+#| message: false
+#| warning: false
+#| label: psm1
+df_pre_t <- df_pre |>
+  #mutate(SJR = replace_na(SJR, 0)) |>
+  group_by(author_id, period) |> 
+  summarise(
+    mean_citation_before = round(mean(cit_standard), 2),
+    mean_sjr_before = round(mean(SJR),2)
+  ) |> filter(period == 0) |>
+  select(-period)
+
+teste_psm_t <- teste_psm |>
+  left_join(df_pre_t, by = "author_id")
+
+teste_psm_t2 <- teste_psm_t |>
+  mutate(
+    mean_citation_before = ifelse(is.na(mean_citation_before), mean_citation, mean_citation_before),
+    mean_sjr_before = ifelse(is.na(mean_sjr_before), mean_sjr, mean_sjr_before)
+  )
+
+psm_emig_t <- teste_psm_t2 |>
+  filter(groups != "4") #|>
+  #filter(is.na(mean_citation_before)) |> view()
+
+# PSM test
+model_teste1_t = matchit(period ~ n_articles + career_age + collab + mean_citation_before + mean_sjr_before, method = "nearest", data = psm_emig_t, ratio = 1, caliper = 0.1) 
+
+summary(model_teste1_t)
+
+pards1_t = match.data(model_teste1_t)
+
+cov_t = c("n_articles", "career_age", "collab", "mean_citation_before", "mean_sjr_before")
+
+#lapply(cov_t, function(v){
+ # t.test(pards1_t[[v]] ~ pards1_t$period)})
+
+# ATT ------------------------------------------
+
+with(pards1_t, t.test(mean_citation ~ period))
+with(pards1_t, t.test(mean_sjr ~ period))
+```
+
+### Return Migrant
+
+```{r}
+#| message: false
+#| warning: false
+#| label: psm2
+psm_ret_t <- teste_psm_t2 |>
+  filter(groups != "3")
+
+model_teste2_t = matchit(period ~ n_articles + career_age + collab + mean_citation_before + mean_sjr_before, method = "nearest", data = psm_ret_t, ratio = 1, caliper = 0.1) 
+
+summary(model_teste2_t)
+
+pards2_t = match.data(model_teste2_t)
+
+# ATT ------------------------------------------
+
+with(pards2_t, t.test(mean_citation ~ period))
+with(pards2_t, t.test(mean_sjr ~ period))
+
+# Propensity score matching - balancing scores
+
+mps = glm(period ~ n_articles + career_age + collab + mean_citation_before + mean_sjr_before, family = binomial(), 
+          data = psm_ret_t)
+
+ps_df = data.frame(p_s = predict(mps, type = "response"), 
+                   afetadas = mps$model$period)
+
+# Histogram of Propensity Score
+labs = paste("Mobility:", c("yes", "no"))
+
+ps_df %>%
+  mutate(afetadas = ifelse(afetadas == 1, labs[1], labs[2])) %>%
+  ggplot(aes(x=p_s)) + geom_histogram(color='white') +
+  facet_wrap(~afetadas) + 
+  xlab("Propensity Score") + 
+  theme_classic()
+```
